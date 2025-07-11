@@ -1,0 +1,7 @@
+-- Your SQL goes here
+CREATE TABLE `rocks`(
+	`id` INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+	`name` VARCHAR(255) NOT NULL,
+	`kind` VARCHAR(255) NOT NULL
+);
+
