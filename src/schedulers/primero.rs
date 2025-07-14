@@ -6,9 +6,9 @@ pub async fn start_primero_schedulers() -> Result<(), Box<dyn std::error::Error>
     let scheduler = JobScheduler::new().await.unwrap();
 
     // 🕒 Add a cron job (every 5 minutes)
-    let job = Job::new_async("* 5 * * * *", |_uuid, _lock| {
+    let job = Job::new_async("* * 5 * * *", |_uuid, _lock| {
         Box::pin(async move {
-            println!("🔄 Running cron task every 5 minutes...");
+            println!("🔄 Running cron task every 5 hours...");
             // Your async logic here (e.g. DB cleanup, send email, etc.)
         })
     })
