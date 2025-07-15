@@ -1,12 +1,15 @@
-use axum::{Json, extract::Path, http::StatusCode, response::IntoResponse};
+use axum::{
+    Json,
+    extract::{OriginalUri, Path},
+    http::StatusCode,
+    response::IntoResponse,
+};
 use serde::Deserialize;
 use serde::Serialize;
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 
 // use diesel::{RunQueryDsl, insert_into};
 // use crate::db::establish_connection;
-// use crate::schema::rocks;
-// use crate::models::{NewRock, Rock};
 
 use crate::utils::utils::{insert_auth_headers, json_error};
 
@@ -57,17 +60,26 @@ impl AbrirCaja {
     }
 }
 
+fn default_f64() -> f64 {
+    0.0
+}
+
 #[derive(Serialize, Deserialize)]
 pub struct GenerarQR {
+    auth_token: String,
     tipo_qr: String,
     subtotal: f64,
-    impuesto: f64,
-    propina: f64,
-    descuento: f64,
     total: f64,
-    id_orden: String,
-    descripcion: String,
-    auth_token: String,
+    #[serde(default = "default_f64")]
+    impuesto: f64,
+    #[serde(default = "default_f64")]
+    propina: f64,
+    #[serde(default = "default_f64")]
+    descuento: f64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub id_orden: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub descripcion: Option<String>,
 }
 
 impl GenerarQR {
@@ -75,11 +87,11 @@ impl GenerarQR {
         RootPayloadQR {
             body: BodyGenerarQR {
                 charge_amount: ChargeAmount {
-                    sub_total: self.subtotal.clone(),
-                    tax: self.impuesto.clone(),
-                    tip: self.propina.clone(),
-                    discount: self.descuento.clone(),
-                    total: self.total.clone(),
+                    sub_total: self.subtotal,
+                    tax: self.impuesto,
+                    tip: self.propina,
+                    discount: self.descuento,
+                    total: self.total,
                 },
                 order_id: self.id_orden.clone(),
                 description: self.descripcion.clone(),
@@ -96,8 +108,10 @@ pub struct RootPayloadQR {
 #[derive(Serialize, Deserialize)]
 pub struct BodyGenerarQR {
     pub charge_amount: ChargeAmount,
-    pub order_id: String,
-    pub description: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub order_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -153,11 +167,7 @@ pub async fn abrir_caja(
 
     let formatted = payload.to_payload();
 
-
     let client = reqwest::Client::new();
-
-    // let json_value: serde_json::Value = serde_json::from_str(&respuesta).unwrap();
-    // println!("{}", serde_json::to_string_pretty(&json_value).unwrap());
 
     let url = format!(
         "{}/session/device",
@@ -197,7 +207,9 @@ pub async fn generar_qr(
     dotenv().ok(); // para inicializar el env
 
     let formatted = payload.to_payload();
-    
+
+    println!("{}", serde_json::to_string_pretty(&formatted).unwrap());
+
     let client = reqwest::Client::new();
 
     let tipo_qr = match payload.tipo_qr.as_str() {
@@ -215,8 +227,6 @@ pub async fn generar_qr(
         ))?,
         tipo_qr
     );
-
-    println!("{}", url);
 
     let response = client
         .post(url)
@@ -264,7 +274,7 @@ pub async fn cerrar_caja(
         .headers(insert_auth_headers(
             env::var("API_KEY").unwrap(),
             env::var("SECRET_KEY").unwrap(),
-            Some(auth_token.to_string()),
+            Some(auth_token),
         ))
         .send()
         .await
@@ -281,12 +291,27 @@ pub async fn cerrar_caja(
     })))
 }
 
-pub async fn estado_transaccion(
+pub async fn handle_transaccion(
     Path((auth_token, id)): Path<(String, String)>,
+    OriginalUri(uri): OriginalUri,
 ) -> Result<impl IntoResponse, (StatusCode, Json<Value>)> {
     dotenv().ok(); // para inicializar el env
+    let path = uri.path();
 
     let client = reqwest::Client::new();
+
+    println!("{}", path);
+    
+    let method = if path.contains("estado-transaccion") {
+        "GET"
+    } else if path.contains("retornar-transaccion") {
+        "PUT"
+    } else {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "error": "Invalid route" })),
+        ));
+    };
 
     let url = format!(
         "{}/transaction/{}",
@@ -298,15 +323,18 @@ pub async fn estado_transaccion(
         id.to_string()
     );
 
-    println!("{}", url);
+    let request_builder = match method {
+        "GET" => client.get(url),
+        "PUT" => client.put(url),
+        _ => unreachable!("No hay metodo"),
+    }
+    .headers(insert_auth_headers(
+        std::env::var("API_KEY").unwrap(),
+        std::env::var("SECRET_KEY").unwrap(),
+        Some(auth_token),
+    ));
 
-    let response = client
-        .get(url)
-        .headers(insert_auth_headers(
-            env::var("API_KEY").unwrap(),
-            env::var("SECRET_KEY").unwrap(),
-            Some(auth_token.to_string()),
-        ))
+    let response = request_builder
         .send()
         .await
         .map_err(|err| json_error(StatusCode::BAD_REQUEST, "error", err))?

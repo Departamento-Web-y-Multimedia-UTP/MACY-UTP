@@ -2,7 +2,7 @@ use axum::{
     routing::{delete, get, post}, Router
 };
 
-use crate::controllers::yappy::{hello_world, abrir_caja, generar_qr, cerrar_caja, estado_transaccion};
+use crate::controllers::yappy::{hello_world, abrir_caja, generar_qr, cerrar_caja, handle_transaccion};
 
 // Import your controller handlers
 
@@ -13,11 +13,8 @@ pub async fn start_axum() -> Result<(), Box<dyn std::error::Error>> {
         .route("/abrir-sesion", post(abrir_caja))   
         .route("/generar-qr", post(generar_qr))
         .route("/cerrar-sesion/{auth_token}", delete(cerrar_caja))
-        .route("/estado-transaccion/{auth_token}/{id}", get(estado_transaccion));
-        //.route("/cerrar-sesion", get())
-        //.route("/retornar-transacion", get())
-        //.route("/status-transacion", get())
-
+        .route("/estado-transaccion/{auth_token}/{id}", get(handle_transaccion))
+        .route("/retornar-transaccion/{auth_token}/{id}", get(handle_transaccion));
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3333").await.unwrap();
     axum::serve(listener, app).await.unwrap();

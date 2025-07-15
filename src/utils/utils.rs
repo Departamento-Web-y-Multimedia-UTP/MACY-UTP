@@ -29,6 +29,6 @@ pub fn insert_auth_headers(api_key: String, secret_key: String, auth_token: Opti
         auth_headers.insert("authorization", HeaderValue::from_str(&t).unwrap());
     }
 
-    println!("{:#?}", auth_headers);
-    auth_headers
+    //println!("{:#?}", auth_headers);
+    return auth_headers;
 }
