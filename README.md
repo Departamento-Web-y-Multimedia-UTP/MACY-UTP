@@ -1,3 +1,5 @@
+# Como descargar rust
+descargar el lenguaje de programación en https://www.rust-lang.org/es/learn/get-started eligiendo el sistema operativo correspondiente
 
 # Como correr el programa
 
