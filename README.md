@@ -1,10 +1,15 @@
 
-#Como correr el programa
+# Como correr el programa
 
-### Ir a la carpeta del proyecto y utilizar el comando `cargo run`
+Clonar y navegar hasta la carpeta del proyecto  y correr el comando 
 
-#Diesel ORM
+`cargo run`
 
+Este comando hara todo lo necesario para descargar e instalar los "crates" (paquetes) y si no hay problema, correra el programa automaticamente
+
+---
+
+# Diesel ORM
 
 ### para hacer el setup principal (init)
 -- diesel setup
