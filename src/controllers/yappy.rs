@@ -208,7 +208,7 @@ pub async fn generar_qr(
 
     let formatted = payload.to_payload();
 
-    println!("{}", serde_json::to_string_pretty(&formatted).unwrap());
+    //println!("{}", serde_json::to_string_pretty(&formatted).unwrap());
 
     let client = reqwest::Client::new();
 
@@ -267,7 +267,7 @@ pub async fn cerrar_caja(
         ))?
     );
 
-    println!("{}", url);
+    //println!("{}", url);
 
     let response = client
         .delete(url)
@@ -300,7 +300,7 @@ pub async fn handle_transaccion(
 
     let client = reqwest::Client::new();
 
-    println!("{}", path);
+    //println!("{}", path);
     
     let method = if path.contains("estado-transaccion") {
         "GET"
