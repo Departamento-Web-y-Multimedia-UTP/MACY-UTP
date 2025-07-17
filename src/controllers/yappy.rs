@@ -4,127 +4,12 @@ use axum::{
     http::{HeaderMap, StatusCode},
     response::IntoResponse,
 };
-use serde::Deserialize;
-use serde::Serialize;
 use serde_json::{Value, json};
-
-// use diesel::{RunQueryDsl, insert_into};
-//use crate::db::conection::establish_connection;
-
+use crate::controllers::structs::yappy::{AbrirCaja, GenerarQR};
 use crate::utils::utils::{get_info_by_mac_address, insert_auth_headers, json_error};
 use dotenvy::dotenv;
 use std::env;
 
-#[derive(Serialize, Deserialize)]
-pub struct CreateRockRequest {
-    name: String,
-    kind: String,
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct RootPayload {
-    pub body: Body,
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct Body {
-    pub device: Device,
-    pub group_id: String,
-}
-#[derive(Serialize, Deserialize)]
-pub struct Device {
-    pub id: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub name: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub user: Option<String>,
-}
-#[derive(Serialize, Deserialize)]
-pub struct AbrirCaja {
-    id_caja: String,
-    id_grupo: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub nombre_caja: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub nombre_cajero: Option<String>,
-}
-
-impl AbrirCaja {
-    pub fn to_payload(&self) -> RootPayload {
-        RootPayload {
-            body: Body {
-                device: Device {
-                    id: self.id_caja.clone(),
-                    name: self.nombre_caja.clone(),
-                    user: self.nombre_cajero.clone(),
-                },
-                group_id: self.id_grupo.clone(),
-            },
-        }
-    }
-}
-
-fn default_f64() -> f64 {
-    0.0
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct GenerarQR {
-    tipo_qr: String,
-    subtotal: f64,
-    total: f64,
-    #[serde(default = "default_f64")]
-    impuesto: f64,
-    #[serde(default = "default_f64")]
-    propina: f64,
-    #[serde(default = "default_f64")]
-    descuento: f64,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub id_orden: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub descripcion: Option<String>,
-}
-
-impl GenerarQR {
-    pub fn to_payload(&self) -> RootPayloadQR {
-        RootPayloadQR {
-            body: BodyGenerarQR {
-                charge_amount: ChargeAmount {
-                    sub_total: self.subtotal,
-                    tax: self.impuesto,
-                    tip: self.propina,
-                    discount: self.descuento,
-                    total: self.total,
-                },
-                order_id: self.id_orden.clone(),
-                description: self.descripcion.clone(),
-            },
-        }
-    }
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct RootPayloadQR {
-    pub body: BodyGenerarQR,
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct BodyGenerarQR {
-    pub charge_amount: ChargeAmount,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub order_id: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub description: Option<String>,
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct ChargeAmount {
-    pub sub_total: f64,
-    pub tax: f64,
-    pub tip: f64,
-    pub discount: f64,
-    pub total: f64,
-}
 
 pub async fn hello_world() -> Json<Value> {
     Json(json!({ "mensaje": "hola che aqui hay yappy" }))

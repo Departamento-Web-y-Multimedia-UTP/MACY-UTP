@@ -1,8 +1,29 @@
-// @generated automatically by Diesel CLI
+// @generated automatically by Diesel CLI.
+diesel::table! {
+
+    caja_cierre_errores (id) {
+        id -> Integer,
+        id_caja -> Integer,
+        respuesta_json -> Json,
+        fecha -> Nullable<Timestamp>,
+    }
+}
+
+diesel::table! {
+    caja_cierre_resumen (id) {
+        id -> Integer,
+        id_caja -> Integer,
+        #[max_length = 50]
+        tipo -> Varchar,
+        monto -> Decimal,
+        transacciones -> Integer,
+        fecha -> Nullable<Timestamp>,
+    }
+}
 
 diesel::table! {
     use diesel::sql_types::*;
-    use crate::db::types::enums::CajasEstadoEnumMapping;
+    use crate::db::types::enums::CajasEstadoEnumMapping; 
 
     cajas (id) {
         id -> Integer,
@@ -42,7 +63,15 @@ diesel::table! {
     }
 }
 
+diesel::joinable!(caja_cierre_errores -> cajas (id_caja));
+diesel::joinable!(caja_cierre_resumen -> cajas (id_caja));
 diesel::joinable!(cajas -> grupos (id_grupo));
 diesel::joinable!(kioskos -> cajas (id_caja));
 
-diesel::allow_tables_to_appear_in_same_query!(cajas, grupos, kioskos,);
+diesel::allow_tables_to_appear_in_same_query!(
+    caja_cierre_errores,
+    caja_cierre_resumen,
+    cajas,
+    grupos,
+    kioskos,
+);

@@ -1,8 +1,10 @@
-use crate::schema::{cajas, grupos, kioskos};
+use crate::schema::{cajas, grupos, kioskos, caja_cierre_errores, caja_cierre_resumen};
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use crate::db::types::enums::CajasEstadoEnum;
+use bigdecimal::BigDecimal;
+use serde_json::{Value};
 
 #[derive(Error, Debug)]
 pub enum DbError {
@@ -47,4 +49,20 @@ pub struct Grupo {
     pub nombre: String,
     pub api_key: String,
     pub secret_key: String,
+}
+
+#[derive(Insertable)]
+#[diesel(table_name = caja_cierre_resumen)]
+pub struct NewCajaCierreResumen {
+    pub id_caja: i32,
+    pub tipo: String,
+    pub monto: BigDecimal,
+    pub transacciones: i32,
+}
+
+#[derive(Insertable)]
+#[diesel(table_name = caja_cierre_errores)]
+pub struct NewCajaCierreError {
+    pub id_caja: i32,
+    pub respuesta_json: Value,
 }

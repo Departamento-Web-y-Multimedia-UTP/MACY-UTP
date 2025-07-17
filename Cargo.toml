@@ -5,7 +5,8 @@ edition = "2024"
 
 [dependencies]
 axum = "0.8.4"
-diesel = { version = "2.2.11", features = ["mysql", "serde_json"] }
+bigdecimal = "0.4.8"
+diesel = { version = "2.2.11", features = ["mysql", "numeric", "serde_json"] }
 diesel-derive-enum = { version = "2.1.0", features = ["mysql"] }
 dotenvy = "0.15.7"
 reqwest = { version = "0.12.22", features = ["json"] }

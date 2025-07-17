@@ -6,12 +6,12 @@ pub mod schedulers;
 pub mod utils;
 
 use start_axum::start_axum;
-//use schedulers::primero::start_primero_schedulers;
+use schedulers::cajas::cerrar_cajas;
 
 
 #[tokio::main]
 async fn main() {
-    //start_primero_schedulers().await.unwrap();
+    cerrar_cajas().await.unwrap();
     start_axum().await.unwrap();
 }
 
