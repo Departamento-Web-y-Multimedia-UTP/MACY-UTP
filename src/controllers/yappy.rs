@@ -1,18 +1,17 @@
 use axum::{
     Json,
     extract::{OriginalUri, Path},
-    http::StatusCode,
+    http::{HeaderMap, StatusCode},
     response::IntoResponse,
 };
 use serde::Deserialize;
 use serde::Serialize;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 // use diesel::{RunQueryDsl, insert_into};
-// use crate::db::establish_connection;
+//use crate::db::conection::establish_connection;
 
-use crate::utils::utils::{insert_auth_headers, json_error};
-
+use crate::utils::utils::{get_info_by_mac_address, insert_auth_headers, json_error};
 use dotenvy::dotenv;
 use std::env;
 
@@ -35,16 +34,21 @@ pub struct Body {
 #[derive(Serialize, Deserialize)]
 pub struct Device {
     pub id: String,
-    pub name: String,
-    pub user: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub user: Option<String>,
 }
 #[derive(Serialize, Deserialize)]
 pub struct AbrirCaja {
     id_caja: String,
     id_grupo: String,
-    nombre_caja: String,
-    nombre_cajero: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub nombre_caja: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub nombre_cajero: Option<String>,
 }
+
 impl AbrirCaja {
     pub fn to_payload(&self) -> RootPayload {
         RootPayload {
@@ -66,7 +70,6 @@ fn default_f64() -> f64 {
 
 #[derive(Serialize, Deserialize)]
 pub struct GenerarQR {
-    auth_token: String,
     tipo_qr: String,
     subtotal: f64,
     total: f64,
@@ -124,74 +127,54 @@ pub struct ChargeAmount {
 }
 
 pub async fn hello_world() -> Json<Value> {
-    Json(json!({ "mensaje": "hola che" }))
+    Json(json!({ "mensaje": "hola che aqui hay yappy" }))
 }
 
-// pub async fn create_rock(
-//     Json(payload): Json<CreateRockRequest>,
-// ) -> Result<impl IntoResponse, StatusCode> {
-//     let conn = &mut establish_connection().unwrap();
-//     let name = payload.name;
-//     let kind = payload.kind;
-
-//     let new_rock = NewRock {
-//         name: &name,
-//         kind: &kind,
-//     };
-
-//     let insert_result = insert_into(rocks::table).values(&new_rock).execute(conn);
-
-//     match insert_result {
-//         Ok(rows_affected) => Ok(Json(json!({ "success": true, "inserted": rows_affected }))),
-//         Err(_) => Err(StatusCode::INTERNAL_SERVER_ERROR),
-//     }
-// }
-
-// pub async fn rocks() -> Result<impl IntoResponse, StatusCode> {
-//     let conn = &mut establish_connection().unwrap();
-
-//     use crate::schema::rocks::dsl::*;
-//     let results = rocks
-//         .load::<Rock>(conn)
-//         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-
-//     Ok(Json(results))
-// }
-
 pub async fn abrir_caja(
-    Json(payload): Json<AbrirCaja>,
+    headers: HeaderMap,
 ) -> Result<impl IntoResponse, (StatusCode, Json<Value>)> {
     dotenv().ok(); // para inicializar el env
 
-    //let conn = &mut establish_connection().unwrap(); //conexion a base de datos
+    let mac_address = headers
+        .get("mac-address")
+        .and_then(|val| val.to_str().ok())
+        .ok_or_else(|| json_error(StatusCode::INTERNAL_SERVER_ERROR, "Prohibido"))?;
 
-    let formatted = payload.to_payload();
+    let info = get_info_by_mac_address(mac_address)
+        .map_err(|_err| json_error(StatusCode::INTERNAL_SERVER_ERROR, "Sin acceso"))?;
+
+    let info_abrir = AbrirCaja {
+        id_caja: info.nombre_caja.to_string(), // id como nombre de la caja en yappy
+        id_grupo: info.id_yappy.clone(), //id del grupo de yappy
+        nombre_caja: Some(info.nombre.clone()),
+        nombre_cajero: None,
+    };
+
+    let formatted = info_abrir.to_payload();
+
+    println!("{}", serde_json::to_string_pretty(&formatted).unwrap());
 
     let client = reqwest::Client::new();
 
     let url = format!(
         "{}/session/device",
-        env::var("YAPPY_ENDPOINT").map_err(|err| json_error(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "Invalid endpoint",
-            err
-        ))?
+        env::var("YAPPY_ENDPOINT")
+            .map_err(|err| json_error(StatusCode::INTERNAL_SERVER_ERROR, err))?
     );
 
     let response = client
         .post(url)
         .headers(insert_auth_headers(
-            env::var("API_KEY").unwrap(),
-            env::var("SECRET_KEY").unwrap(),
-            None,
-        ))
+            info.api_key, 
+            info.secret_key, 
+            None))
         .json(&formatted) // This automatically serializes `formatted` to JSON
         .send()
         .await
-        .map_err(|err| json_error(StatusCode::BAD_REQUEST, "error", err))?
+        .map_err(|err| json_error(StatusCode::BAD_REQUEST, err))?
         .text()
         .await
-        .map_err(|err| json_error(StatusCode::BAD_REQUEST, "error", err))?;
+        .map_err(|err| json_error(StatusCode::BAD_REQUEST, err))?;
 
     let response_json: serde_json::Value = serde_json::from_str(&response).unwrap();
 
@@ -202,13 +185,29 @@ pub async fn abrir_caja(
 }
 
 pub async fn generar_qr(
-    Json(payload): Json<GenerarQR>,
+    headers: HeaderMap,
+    Json(mut payload): Json<GenerarQR>,
 ) -> Result<impl IntoResponse, (StatusCode, Json<Value>)> {
     dotenv().ok(); // para inicializar el env
 
+    let mac_address = headers
+        .get("mac-address")
+        .and_then(|val| val.to_str().ok())
+        .ok_or_else(|| json_error(StatusCode::INTERNAL_SERVER_ERROR, "Prohibido"))?;
+
+    let info = get_info_by_mac_address(mac_address)
+        .map_err(|_err| json_error(StatusCode::INTERNAL_SERVER_ERROR, "Sin acceso"))?;
+
+    println!("{:#?}", info);
+
+    payload.descripcion = format!("Pago en Kiosko UTP del {}", info.nombre).into();
+
     let formatted = payload.to_payload();
 
-    //println!("{}", serde_json::to_string_pretty(&formatted).unwrap());
+    println!(
+        "informacion formatiada: {}",
+        serde_json::to_string_pretty(&formatted).unwrap()
+    );
 
     let client = reqwest::Client::new();
 
@@ -220,28 +219,25 @@ pub async fn generar_qr(
 
     let url = format!(
         "{}/qr/generate/{}",
-        env::var("YAPPY_ENDPOINT").map_err(|err| json_error(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "Invalid endpoint",
-            err
-        ))?,
+        env::var("YAPPY_ENDPOINT")
+            .map_err(|err| json_error(StatusCode::INTERNAL_SERVER_ERROR, err))?,
         tipo_qr
     );
 
     let response = client
         .post(url)
         .headers(insert_auth_headers(
-            env::var("API_KEY").unwrap(),
-            env::var("SECRET_KEY").unwrap(),
-            Some(payload.auth_token.to_string()),
+            info.api_key,
+            info.secret_key,
+            info.token_autorizacion,
         ))
         .json(&formatted) // This automatically serializes `formatted` to JSON
         .send()
         .await
-        .map_err(|err| json_error(StatusCode::BAD_REQUEST, "error", err))?
+        .map_err(|err| json_error(StatusCode::BAD_REQUEST, err))?
         .text()
         .await
-        .map_err(|err| json_error(StatusCode::BAD_REQUEST, "error", err))?;
+        .map_err(|err| json_error(StatusCode::BAD_REQUEST, err))?;
 
     let response_json: serde_json::Value = serde_json::from_str(&response).unwrap();
 
@@ -252,19 +248,24 @@ pub async fn generar_qr(
 }
 
 pub async fn cerrar_caja(
-    Path(auth_token): Path<String>,
+    headers: HeaderMap,
 ) -> Result<impl IntoResponse, (StatusCode, Json<Value>)> {
     dotenv().ok(); // para inicializar el env
+
+    let mac_address = headers
+        .get("mac-address")
+        .and_then(|val| val.to_str().ok())
+        .ok_or_else(|| json_error(StatusCode::INTERNAL_SERVER_ERROR, "Prohibido"))?;
+
+    let info = get_info_by_mac_address(mac_address)
+        .map_err(|_err| json_error(StatusCode::INTERNAL_SERVER_ERROR, "Sin acceso"))?;
 
     let client = reqwest::Client::new();
 
     let url = format!(
         "{}/session/device",
-        env::var("YAPPY_ENDPOINT").map_err(|err| json_error(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "Invalid endpoint",
-            err
-        ))?
+        env::var("YAPPY_ENDPOINT")
+            .map_err(|err| json_error(StatusCode::INTERNAL_SERVER_ERROR, err,))?
     );
 
     //println!("{}", url);
@@ -272,16 +273,16 @@ pub async fn cerrar_caja(
     let response = client
         .delete(url)
         .headers(insert_auth_headers(
-            env::var("API_KEY").unwrap(),
-            env::var("SECRET_KEY").unwrap(),
-            Some(auth_token),
+            info.api_key,
+            info.secret_key,
+            info.token_autorizacion,
         ))
         .send()
         .await
-        .map_err(|err| json_error(StatusCode::BAD_REQUEST, "error", err))?
+        .map_err(|err| json_error(StatusCode::BAD_REQUEST, err))?
         .text()
         .await
-        .map_err(|err| json_error(StatusCode::BAD_REQUEST, "error", err))?;
+        .map_err(|err| json_error(StatusCode::BAD_REQUEST, err))?;
 
     let response_json: serde_json::Value = serde_json::from_str(&response).unwrap();
 
@@ -292,16 +293,26 @@ pub async fn cerrar_caja(
 }
 
 pub async fn handle_transaccion(
-    Path((auth_token, id)): Path<(String, String)>,
+    headers: HeaderMap,
+    Path(id): Path<String>,
     OriginalUri(uri): OriginalUri,
 ) -> Result<impl IntoResponse, (StatusCode, Json<Value>)> {
     dotenv().ok(); // para inicializar el env
+
+    let mac_address = headers
+        .get("mac-address")
+        .and_then(|val| val.to_str().ok())
+        .ok_or_else(|| json_error(StatusCode::INTERNAL_SERVER_ERROR, "Prohibido"))?; // return early if header missing or invalid
+
+    let info = get_info_by_mac_address(mac_address)
+        .map_err(|_err| json_error(StatusCode::INTERNAL_SERVER_ERROR, "Sin acceso"))?; // or map the diesel error more precisely
+
     let path = uri.path();
 
     let client = reqwest::Client::new();
 
     //println!("{}", path);
-    
+
     let method = if path.contains("estado-transaccion") {
         "GET"
     } else if path.contains("retornar-transaccion") {
@@ -315,11 +326,8 @@ pub async fn handle_transaccion(
 
     let url = format!(
         "{}/transaction/{}",
-        env::var("YAPPY_ENDPOINT").map_err(|err| json_error(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "Invalid endpoint",
-            err
-        ))?,
+        env::var("YAPPY_ENDPOINT")
+            .map_err(|err| json_error(StatusCode::INTERNAL_SERVER_ERROR, err,))?,
         id.to_string()
     );
 
@@ -329,18 +337,18 @@ pub async fn handle_transaccion(
         _ => unreachable!("No hay metodo"),
     }
     .headers(insert_auth_headers(
-        std::env::var("API_KEY").unwrap(),
-        std::env::var("SECRET_KEY").unwrap(),
-        Some(auth_token),
+        info.api_key,
+        info.secret_key,
+        info.token_autorizacion,
     ));
 
     let response = request_builder
         .send()
         .await
-        .map_err(|err| json_error(StatusCode::BAD_REQUEST, "error", err))?
+        .map_err(|err| json_error(StatusCode::BAD_REQUEST, err))?
         .text()
         .await
-        .map_err(|err| json_error(StatusCode::BAD_REQUEST, "error", err))?;
+        .map_err(|err| json_error(StatusCode::BAD_REQUEST, err))?;
 
     let response_json: serde_json::Value = serde_json::from_str(&response).unwrap();
 

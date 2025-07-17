@@ -1,4 +1,3 @@
-pub mod models;
 pub mod schema;
 pub mod start_axum;
 pub mod db;

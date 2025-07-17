@@ -1,11 +1,48 @@
-// @generated automatically by Diesel CLI.
+// @generated automatically by Diesel CLI
 
 diesel::table! {
-    rocks (id) {
+    use diesel::sql_types::*;
+    use crate::db::types::enums::CajasEstadoEnumMapping;
+
+    cajas (id) {
         id -> Integer,
-        #[max_length = 255]
-        name -> Varchar,
-        #[max_length = 255]
-        kind -> Varchar,
+        id_grupo -> Integer,
+        #[max_length = 100]
+        nombre_caja -> Varchar,
+        #[max_length = 50]
+        tipo -> Varchar,
+        token_autorizacion -> Nullable<Text>,
+        #[max_length = 7]
+        estado -> CajasEstadoEnumMapping,
     }
 }
+
+diesel::table! {
+    grupos (id) {
+        id -> Integer,
+        #[max_length = 100]
+        id_yappy -> Varchar,
+        #[max_length = 100]
+        nombre -> Varchar,
+        #[max_length = 255]
+        api_key -> Varchar,
+        #[max_length = 255]
+        secret_key -> Varchar,
+    }
+}
+
+diesel::table! {
+    kioskos (id) {
+        id -> Integer,
+        id_caja -> Integer,
+        #[max_length = 100]
+        nombre -> Varchar,
+        #[max_length = 50]
+        mac_address -> Varchar,
+    }
+}
+
+diesel::joinable!(cajas -> grupos (id_grupo));
+diesel::joinable!(kioskos -> cajas (id_caja));
+
+diesel::allow_tables_to_appear_in_same_query!(cajas, grupos, kioskos,);
