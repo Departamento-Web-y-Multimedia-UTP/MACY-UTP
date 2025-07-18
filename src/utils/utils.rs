@@ -51,6 +51,7 @@ pub struct KioskoInfo {
     pub nombre: String,
 
     // From caja
+    pub id_caja: i32,
     pub nombre_caja: String,
     pub token_autorizacion: Option<String>,
     pub estado: CajasEstadoEnum, // or String if you serialize it as string
@@ -82,6 +83,7 @@ pub fn get_info_by_mac_address(mac_address: &str) -> Result<KioskoInfo, diesel::
 
     Ok(KioskoInfo {
         nombre: kiosko.nombre,
+        id_caja: caja.id,
         nombre_caja: caja.nombre_caja,
         token_autorizacion: caja.token_autorizacion,
         estado: caja.estado,
