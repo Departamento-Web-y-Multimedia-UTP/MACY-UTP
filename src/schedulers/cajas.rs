@@ -1,15 +1,13 @@
-use crate::{db::{
-    conection::establish_connection,
-    types::enums::CajasEstadoEnum,
-}};
-use crate::utils::cajas_utils::guardar_datos_caja;
+use crate::db::types::enums::CajasEstadoEnum;
 use crate::schema::{cajas, grupos};
+use crate::utils::cajas_utils::guardar_datos_caja;
 use crate::utils::utils::{insert_auth_headers, json_error};
 use axum::{Json, http::StatusCode};
 use diesel::prelude::*;
 use dotenvy::dotenv;
 //use serde::Serialize;
-use serde_json::{Value};
+use crate::AppState;
+use serde_json::Value;
 use std::env;
 use tokio_cron_scheduler::{Job, JobScheduler};
 
@@ -23,13 +21,17 @@ pub struct CajaWithCreds {
     pub token_autorizacion: Option<String>,
 }
 
-pub async fn cerrar_cajas_job() -> Result<(), Box<dyn std::error::Error>> {
+pub async fn cerrar_cajas_job(state: &AppState) -> Result<(), Box<dyn std::error::Error>> {
     let scheduler = JobScheduler::new().await.unwrap();
 
-    let cerrar_caja_job = Job::new_async("* * 5 * * *", |_uuid, _lock| {
-        //let cerrar_caja_job = Job::new_async("* 59 23 * * *", |_uuid, _lock| {
+    let state = state.clone();
+
+    //let cerrar_caja_job = Job::new_async("* * 5 * * *", move |_uuid, _lock| {
+    let cerrar_caja_job = Job::new_async("* 59 23 * * *", move |_uuid, _lock| {
+        let state = state.clone();
+
         Box::pin(async move {
-            let mut conn = establish_connection().unwrap();
+            let mut conn = state.db_pool.get().unwrap();
 
             let cajas_with_keys: Vec<CajaWithCreds> = cajas::table
                 .inner_join(grupos::table.on(grupos::id.eq(cajas::id_grupo)))
@@ -54,6 +56,7 @@ pub async fn cerrar_cajas_job() -> Result<(), Box<dyn std::error::Error>> {
                 println!("cerrando la caja: {}", caja.nombre_caja);
 
                 let _ = guardar_datos_caja(
+                    state.clone(),
                     caja.api_key,
                     caja.secret_key,
                     caja.token_autorizacion,

@@ -2,7 +2,6 @@ use axum::{Json, http::StatusCode};
 use reqwest::header::{HeaderMap, HeaderValue};
 use serde_json::json;
 
-use crate::db::conection::establish_connection;
 use crate::db::models::{Caja, Grupo, Kiosko};
 use crate::schema::{
     cajas::dsl as cajas_dsl, grupos::dsl as grupos_dsl, kioskos::dsl as kioskos_dsl,
@@ -10,7 +9,7 @@ use crate::schema::{
 use diesel::prelude::*;
 use serde::Serialize;
 use crate::db::types::enums::CajasEstadoEnum;
-
+use crate::AppState;
 
 /// Converts any error with a label into an Axum-compatible error response.
 pub fn json_error<E: std::fmt::Display>(
@@ -63,8 +62,8 @@ pub struct KioskoInfo {
     pub secret_key: String,
 }
 
-pub fn get_info_by_mac_address(mac_address: &str) -> Result<KioskoInfo, diesel::result::Error> {
-    let mut conn = establish_connection().unwrap();
+pub fn get_info_by_mac_address(state: AppState, mac_address: &str) -> Result<KioskoInfo, diesel::result::Error> {
+    let mut conn = state.db_pool.get().unwrap();
 
     let kiosko = kioskos_dsl::kioskos
         .filter(kioskos_dsl::mac_address.eq(mac_address))

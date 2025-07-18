@@ -8,11 +8,21 @@ pub mod utils;
 use start_axum::start_axum;
 use schedulers::cajas::cerrar_cajas_job;
 
+use crate::db::conection::{create_pool, MySqlPool};
+
+#[derive(Clone)]
+pub struct AppState {
+    pub db_pool: MySqlPool,
+}
 
 #[tokio::main]
 async fn main() {
-    cerrar_cajas_job().await.unwrap();
-    start_axum().await.unwrap();
+
+    let db_pool = create_pool();
+    let state = AppState { db_pool };
+
+    cerrar_cajas_job(&state).await.unwrap();
+    start_axum(&state).await.unwrap();
 }
 
 

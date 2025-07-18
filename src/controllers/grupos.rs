@@ -1,8 +1,8 @@
-use axum::{Json, http::StatusCode, response::IntoResponse};
+use axum::{Json, http::StatusCode, response::IntoResponse, extract::{State}};
 
-use crate::db::conection::establish_connection;
 use crate::db::models::{Caja, Grupo, Kiosko};
 use crate::db::types::enums::CajasEstadoEnum;
+use crate::AppState;
 use diesel::prelude::*;
 use serde::Serialize;
 
@@ -26,10 +26,12 @@ pub struct CajaConKiosko {
     pub kiosko: Option<Kiosko>,
 }
 
-pub async fn get_grupos() -> Result<impl IntoResponse, StatusCode> {
+pub async fn get_grupos(
+    State(state): State<AppState>,
+) -> Result<impl IntoResponse, StatusCode> {
     use crate::schema::{cajas::dsl as cajas_dsl, grupos::dsl::*, kioskos::dsl as kioskos_dsl};
 
-    let mut conn = establish_connection().map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let mut conn = state.db_pool.get().unwrap();
 
     // 1. Obtener todos los grupos
     let all_grupos: Vec<Grupo> = grupos

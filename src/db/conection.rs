@@ -3,13 +3,17 @@ use dotenvy::dotenv;
 use std::env;
 
 use diesel::{
-    mysql::MysqlConnection, Connection
+    mysql::MysqlConnection,
+    r2d2::{ConnectionManager, Pool}
 };
 
-pub fn establish_connection() -> Result<MysqlConnection, diesel::result::ConnectionError> {
+pub type MySqlPool = Pool<ConnectionManager<MysqlConnection>>;
+
+pub fn create_pool() -> MySqlPool {
     dotenv().ok();
-    let db_url = env::var("DATABASE_URL").map_err(|_| {
-        diesel::result::ConnectionError::BadConnection("DATABASE_URL not set".into())
-    })?;
-    MysqlConnection::establish(&db_url)
+    let db_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+    let manager = ConnectionManager::<MysqlConnection>::new(db_url);
+    Pool::builder()
+        .build(manager)
+        .expect("Failed to create MySQL connection pool")
 }
