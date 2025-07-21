@@ -3,11 +3,13 @@ use crate::controllers::structs::yappy::GenerarQR;
 use crate::db::models::Caja;
 use crate::db::types::enums::CajasEstadoEnum;
 use crate::schema::cajas;
-use crate::utils::cajas_utils::{abrir_caja_and_return_value, guardar_datos_caja};
+use crate::utils::cajas_utils::{
+    abrir_caja_and_return_value, guardar_datos_caja, manage_transaction_response,
+};
 use crate::utils::utils::{get_info_by_mac_address, insert_auth_headers, json_error};
 use axum::{
     Json,
-    extract::{OriginalUri, Path, State},
+    extract::{OriginalUri, State},
     http::{HeaderMap, StatusCode},
     response::IntoResponse,
 };
@@ -41,10 +43,10 @@ pub async fn generar_qr(
     let mac_address = headers
         .get("mac-address")
         .and_then(|val| val.to_str().ok())
-        .ok_or_else(|| json_error(StatusCode::INTERNAL_SERVER_ERROR, "Prohibido"))?;
+        .ok_or_else(|| json_error(StatusCode::FORBIDDEN, "Prohibido"))?;
 
-    let mut info = get_info_by_mac_address(state.clone(), mac_address)
-        .map_err(|_err| json_error(StatusCode::INTERNAL_SERVER_ERROR, "Sin acceso"))?;
+    let mut info = get_info_by_mac_address(&state, mac_address)
+        .map_err(|_err| json_error(StatusCode::FORBIDDEN, "Sin acceso"))?;
 
     let mut conn = state.db_pool.get().unwrap();
 
@@ -112,6 +114,12 @@ pub async fn generar_qr(
 
     let response_json: serde_json::Value = serde_json::from_str(&response).unwrap();
 
+    let _ = diesel::update(cajas::table.filter(cajas::id.eq(info.id_caja)))
+        .set((cajas::transaccion_actual.eq(response_json
+            .pointer("/body/transactionId")
+            .and_then(|v| v.as_str())),))
+        .execute(&mut conn);
+
     Ok(Json(json!({
         "success": true,
         "data": response_json
@@ -127,10 +135,10 @@ pub async fn cerrar_caja(
     let mac_address = headers
         .get("mac-address")
         .and_then(|val| val.to_str().ok())
-        .ok_or_else(|| json_error(StatusCode::INTERNAL_SERVER_ERROR, "Prohibido"))?;
+        .ok_or_else(|| json_error(StatusCode::FORBIDDEN, "Prohibido"))?;
 
-    let info = get_info_by_mac_address(state.clone(), mac_address)
-        .map_err(|_err| json_error(StatusCode::INTERNAL_SERVER_ERROR, "Sin acceso"))?;
+    let info = get_info_by_mac_address(&state, mac_address)
+        .map_err(|_err| json_error(StatusCode::FORBIDDEN, "Sin acceso"))?;
 
     let response_json = guardar_datos_caja(
         state,
@@ -151,7 +159,6 @@ pub async fn cerrar_caja(
 pub async fn handle_transaccion(
     headers: HeaderMap,
     State(state): State<AppState>,
-    Path(id): Path<String>,
     OriginalUri(uri): OriginalUri,
 ) -> Result<impl IntoResponse, (StatusCode, Json<Value>)> {
     dotenv().ok(); // para inicializar el env
@@ -159,14 +166,28 @@ pub async fn handle_transaccion(
     let mac_address = headers
         .get("mac-address")
         .and_then(|val| val.to_str().ok())
-        .ok_or_else(|| json_error(StatusCode::INTERNAL_SERVER_ERROR, "Prohibido"))?; // return early if header missing or invalid
+        .ok_or_else(|| json_error(StatusCode::FORBIDDEN, "Prohibido"))?; // return early if header missing or invalid
 
-    let info = get_info_by_mac_address(state.clone(), mac_address)
-        .map_err(|_err| json_error(StatusCode::INTERNAL_SERVER_ERROR, "Sin acceso"))?; // or map the diesel error more precisely
+    let info = get_info_by_mac_address(&state, mac_address)
+        .map_err(|_err| json_error(StatusCode::FORBIDDEN, "Sin acceso"))?; // or map the diesel error more precisely
+
+    let mut conn = state.db_pool.get().unwrap();
+
+    let caja = cajas::table
+        .filter(cajas::id.eq(info.id_caja))
+        .select(Caja::as_select())
+        .first::<Caja>(&mut conn)
+        .map_err(|_| json_error(StatusCode::CONFLICT, "Caja no encontrada"))?;
+
+    // chequea si la caja tiene una transaccion o no, de no tener, devuelve un bad request
+    let transaccion_id = caja.transaccion_actual.ok_or_else(|| {
+        json_error(
+            StatusCode::BAD_REQUEST,
+            "Actualmente no hay transacción activa en esta caja",
+        )
+    })?;
 
     let path = uri.path();
-
-    let client = reqwest::Client::new();
 
     //println!("{}", path);
 
@@ -175,17 +196,16 @@ pub async fn handle_transaccion(
     } else if path.contains("retornar-transaccion") {
         "PUT"
     } else {
-        return Err((
-            StatusCode::BAD_REQUEST,
-            Json(json!({ "error": "Invalid route" })),
-        ));
+        return Err(json_error(StatusCode::BAD_REQUEST, "Ruta invalida"));
     };
+
+    let client = reqwest::Client::new();
 
     let url = format!(
         "{}/transaction/{}",
         env::var("YAPPY_ENDPOINT")
             .map_err(|err| json_error(StatusCode::INTERNAL_SERVER_ERROR, err,))?,
-        id.to_string()
+        transaccion_id.to_string()
     );
 
     let request_builder = match method {
@@ -209,8 +229,22 @@ pub async fn handle_transaccion(
 
     let response_json: serde_json::Value = serde_json::from_str(&response).unwrap();
 
-    Ok(Json(json!({
+    let referencia =
+        manage_transaction_response(&path, &response_json, info.id_caja, &state).await.unwrap();
+
+    // Build the base response object
+    let mut response_data = json!({
         "success": true,
-        "data": response_json
-    })))
+        "data": response_json,
+    });
+
+    // si referencia existe, entonce se incrusta en el JSON de respuesta
+    if let Some(ref_str) = referencia {
+        if let Some(obj) = response_data.as_object_mut() {
+            obj.insert("referencia".to_string(), json!(ref_str));
+        }
+    }
+
+    Ok(Json(response_data))
+
 }

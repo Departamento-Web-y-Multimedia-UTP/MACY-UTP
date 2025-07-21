@@ -1,14 +1,11 @@
 use crate::AppState;
 use crate::controllers::structs::yappy::AbrirCaja;
+use crate::db::{
+    models::{NewCajaCierreError, NewCajaCierreResumen},
+    types::enums::CajasEstadoEnum,
+};
 use crate::schema::{caja_cierre_errores, caja_cierre_resumen, cajas};
 use crate::utils::utils::{get_info_by_mac_address, insert_auth_headers, json_error};
-use crate::{
-    db::{
-        models::{NewCajaCierreError, NewCajaCierreResumen},
-        types::enums::CajasEstadoEnum,
-    },
-    schedulers::cajas::cerrar_caja_en_yappy,
-};
 use axum::http::HeaderMap;
 use axum::{Json, http::StatusCode};
 use bigdecimal::{BigDecimal, FromPrimitive};
@@ -103,6 +100,36 @@ pub async fn guardar_datos_caja(
     return respuesta;
 }
 
+pub async fn cerrar_caja_en_yappy(
+    api_key: String,
+    secret_key: String,
+    auth_token: Option<String>,
+) -> Result<Value, (StatusCode, Json<Value>)> {
+    dotenv().ok(); // para inicializar el env
+
+    let client = reqwest::Client::new();
+
+    let url = format!(
+        "{}/session/device",
+        env::var("YAPPY_ENDPOINT")
+            .map_err(|err| json_error(StatusCode::INTERNAL_SERVER_ERROR, err,))?
+    );
+
+    let response = client
+        .delete(url)
+        .headers(insert_auth_headers(api_key, secret_key, auth_token))
+        .send()
+        .await
+        .map_err(|err| json_error(StatusCode::BAD_REQUEST, err))?
+        .text()
+        .await
+        .map_err(|err| json_error(StatusCode::BAD_REQUEST, err))?;
+
+    let response_json: serde_json::Value = serde_json::from_str(&response).unwrap();
+
+    Ok(response_json)
+}
+
 pub async fn abrir_caja_and_return_value(
     headers: HeaderMap,
     state: AppState,
@@ -114,7 +141,7 @@ pub async fn abrir_caja_and_return_value(
         .and_then(|val| val.to_str().ok())
         .ok_or_else(|| json_error(StatusCode::INTERNAL_SERVER_ERROR, "Prohibido"))?;
 
-    let info = get_info_by_mac_address(state.clone(), mac_address)
+    let info = get_info_by_mac_address(&state, mac_address)
         .map_err(|_| json_error(StatusCode::INTERNAL_SERVER_ERROR, "Sin acceso"))?;
 
     let info_abrir = AbrirCaja {
@@ -146,19 +173,74 @@ pub async fn abrir_caja_and_return_value(
 
     let response_json: Value = serde_json::from_str(&response).unwrap();
 
-    // Update database
-    use crate::schema::cajas::dsl::*;
-
     let mut conn = state.db_pool.get().unwrap();
 
-    let _ = diesel::update(cajas.filter(id.eq(info.id_caja)))
+    let _ = diesel::update(cajas::table.filter(cajas::id.eq(info.id_caja)))
         .set((
-            token_autorizacion.eq(response_json
+            cajas::token_autorizacion.eq(response_json
                 .pointer("/body/token")
                 .and_then(|v| v.as_str())),
-            estado.eq(CajasEstadoEnum::Abierto),
+            cajas::estado.eq(CajasEstadoEnum::Abierto),
         ))
         .execute(&mut conn);
 
     Ok(response_json)
+}
+
+pub async fn manage_transaction_response(
+    path: &str,
+    response_json: &Value,
+    id_caja: i32,
+    state: &AppState,
+) -> Result<Option<String>, (StatusCode, Json<Value>)> {
+    // Handle "estado-transaccion"
+    if path.contains("estado-transaccion") {
+        if let Some(status) = response_json
+            .pointer("/body/status")
+            .and_then(|s| s.as_str())
+        {
+            if status == "COMPLETED" {
+                let referencia = update_caja_transaccion_actual_null(&state, id_caja);
+                return Ok(referencia?);
+            }
+        }
+    }
+    // Handle "retornar-transaccion"
+    else if path.contains("retornar-transaccion") {
+        if let Some(code) = response_json
+            .pointer("/status/code")
+            .and_then(|c| c.as_str())
+        {
+            if code == "YP-0000" {
+                let referencia = update_caja_transaccion_actual_null(&state, id_caja);
+                return Ok(referencia?);
+            }
+        }
+    }
+
+    Ok(None)
+}
+
+fn update_caja_transaccion_actual_null(
+    state: &AppState,
+    id_caja: i32,
+) -> Result<Option<String>, (StatusCode, Json<Value>)> {
+    let mut conn = state.db_pool.get().unwrap();
+
+    let referencia: Option<String> = cajas::table
+        .filter(cajas::id.eq(id_caja))
+        .select(cajas::transaccion_actual)
+        .first(&mut conn).unwrap();
+
+    diesel::update(cajas::table.filter(cajas::id.eq(id_caja)))
+        .set(cajas::transaccion_actual.eq(None::<String>))
+        .execute(&mut conn)
+        .map_err(|err| {
+            json_error(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Error al actualizar la caja: {}", err),
+            )
+        })?;
+
+    Ok(referencia)
 }

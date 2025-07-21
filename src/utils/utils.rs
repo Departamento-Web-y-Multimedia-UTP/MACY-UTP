@@ -62,7 +62,7 @@ pub struct KioskoInfo {
     pub secret_key: String,
 }
 
-pub fn get_info_by_mac_address(state: AppState, mac_address: &str) -> Result<KioskoInfo, diesel::result::Error> {
+pub fn get_info_by_mac_address(state: &AppState, mac_address: &str) -> Result<KioskoInfo, diesel::result::Error> {
     let mut conn = state.db_pool.get().unwrap();
 
     let kiosko = kioskos_dsl::kioskos

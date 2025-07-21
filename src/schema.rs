@@ -1,4 +1,3 @@
-// @generated automatically by Diesel CLI.
 diesel::table! {
 
     caja_cierre_errores (id) {
@@ -33,6 +32,8 @@ diesel::table! {
         #[max_length = 50]
         tipo -> Varchar,
         token_autorizacion -> Nullable<Text>,
+        #[max_length = 100]
+        transaccion_actual -> Nullable<Varchar>,
         #[max_length = 7]
         estado -> CajasEstadoEnumMapping,
     }

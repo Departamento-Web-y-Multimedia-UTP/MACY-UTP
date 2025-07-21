@@ -7,4 +7,4 @@ custom_type_derives = ["diesel::query_builder::QueryId", "Clone"]
 #filter = { except_tables = ["cajas"] }
 
 [migrations_directory]
-dir = "C:\\Proyectos\\AxumApps\\Yappy-API\\migrations"
+dir = "C:\\Proyectos\\AxumApps\\MACY-UTP\\migrations"

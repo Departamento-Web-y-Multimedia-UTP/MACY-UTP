@@ -38,6 +38,7 @@ pub struct Caja {
     pub nombre_caja: String,
     pub tipo: String,
     pub token_autorizacion: Option<String>,
+    pub transaccion_actual: Option<String>,
     pub estado: CajasEstadoEnum,
 }
 
