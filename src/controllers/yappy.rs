@@ -13,6 +13,8 @@ use axum::{
     http::{HeaderMap, StatusCode},
     response::IntoResponse,
 };
+use chrono::prelude::*;
+use chrono_tz::America::Panama;
 use diesel::prelude::*;
 use dotenvy::dotenv;
 use serde_json::{Value, json};
@@ -229,8 +231,9 @@ pub async fn handle_transaccion(
 
     let response_json: serde_json::Value = serde_json::from_str(&response).unwrap();
 
-    let referencia =
-        manage_transaction_response(&path, &response_json, info.id_caja, &state).await.unwrap();
+    let referencia = manage_transaction_response(&path, &response_json, info.id_caja, &state)
+        .await
+        .unwrap();
 
     // Build the base response object
     let mut response_data = json!({
@@ -242,9 +245,12 @@ pub async fn handle_transaccion(
     if let Some(ref_str) = referencia {
         if let Some(obj) = response_data.as_object_mut() {
             obj.insert("referencia".to_string(), json!(ref_str));
+            let now_in_panama = Panama.from_utc_datetime(&Utc::now().naive_utc());
+            let formatted_time = now_in_panama.format("%m/%d/%Y %I:%M:%S %p").to_string().to_uppercase();
+
+            obj.insert("fecha".to_string(), json!(formatted_time));
         }
     }
 
     Ok(Json(response_data))
-
 }

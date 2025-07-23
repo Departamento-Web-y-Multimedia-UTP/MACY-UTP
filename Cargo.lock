@@ -8,6 +8,7 @@ version = "0.1.0"
 dependencies = [
  "axum",
  "bigdecimal",
+ "chrono",
  "chrono-tz",
  "diesel",
  "diesel-derive-enum",
@@ -202,6 +203,7 @@ dependencies = [
  "iana-time-zone",
  "js-sys",
  "num-traits",
+ "serde",
  "wasm-bindgen",
  "windows-link",
 ]
