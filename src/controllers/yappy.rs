@@ -75,7 +75,7 @@ pub async fn generar_qr(
             .map(|s| s.to_string());
     }
 
-    payload.descripcion = format!("Pago en Kiosko UTP del {}", info.nombre).into();
+    payload.descripcion = format!("Pago por pedido: {} en Kiosko UTP del {}", payload.id_orden.clone().unwrap(), info.nombre).into();
 
     let formatted = payload.to_payload();
 

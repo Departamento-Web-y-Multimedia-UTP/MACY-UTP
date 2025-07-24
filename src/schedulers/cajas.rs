@@ -18,8 +18,6 @@ pub struct CajaWithCreds {
 pub async fn cerrar_cajas_job(state: &AppState) -> Result<(), Box<dyn std::error::Error>> {
     let scheduler = JobScheduler::new().await.unwrap();
 
-    println!("{}", chrono_tz::America::Panama);
-
     let state = state.clone(); // 👈 clone it outside
 
     let cerrar_caja_job = JobBuilder::new()
