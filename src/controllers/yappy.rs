@@ -21,7 +21,7 @@ use serde_json::{Value, json};
 use std::env;
 
 pub async fn hello_world() -> Json<Value> {
-    Json(json!({ "mensaje": "hola che aqui hay yappy" }))
+    Json(json!({ "mensaje": "Manejador Automático de Cajas Yappy v1.0" }))
 }
 
 pub async fn abrir_caja(
@@ -50,21 +50,13 @@ pub async fn generar_qr(
     let mut info = get_info_by_mac_address(&state, mac_address)
         .map_err(|_err| json_error(StatusCode::FORBIDDEN, "Sin acceso"))?;
 
-    let mut conn = state.db_pool.get().unwrap();
-
-    let caja = cajas::table
-        .filter(cajas::id.eq(info.id_caja))
-        .select(Caja::as_select())
-        .first::<Caja>(&mut conn)
-        .map_err(|_| json_error(StatusCode::INTERNAL_SERVER_ERROR, "Caja no encontrada"))?;
-
-    if caja.estado.eq(&CajasEstadoEnum::Cerrado) {
+    if info.estado.eq(&CajasEstadoEnum::Cerrado) {
         println!(
             "Caja {} está cerrada. Abriéndola automáticamente...",
             info.nombre
         );
         //Llama a tu función abrir_caja con headers
-        let info_caja_json = abrir_caja_and_return_value(headers.clone(), state)
+        let info_caja_json = abrir_caja_and_return_value(headers.clone(), state.clone())
             .await
             .map_err(|_| json_error(StatusCode::INTERNAL_SERVER_ERROR, "Error al abrir la caja"))?;
 
@@ -75,7 +67,12 @@ pub async fn generar_qr(
             .map(|s| s.to_string());
     }
 
-    payload.descripcion = format!("Pago por pedido: {} en Kiosko UTP del {}", payload.id_orden.clone().unwrap(), info.nombre).into();
+    payload.descripcion = format!(
+        "Pago por pedido: {} en Kiosko UTP del {}",
+        payload.id_orden.clone().unwrap(),
+        info.nombre
+    )
+    .into();
 
     let formatted = payload.to_payload();
 
@@ -115,6 +112,8 @@ pub async fn generar_qr(
         .map_err(|err| json_error(StatusCode::BAD_REQUEST, err))?;
 
     let response_json: serde_json::Value = serde_json::from_str(&response).unwrap();
+
+    let mut conn = state.db_pool.get().unwrap();
 
     let _ = diesel::update(cajas::table.filter(cajas::id.eq(info.id_caja)))
         .set((cajas::transaccion_actual.eq(response_json
@@ -245,9 +244,13 @@ pub async fn handle_transaccion(
     if let Some(ref_str) = referencia {
         if let Some(obj) = response_data.as_object_mut() {
             obj.insert("referencia".to_string(), json!(ref_str));
+            obj.insert("id_caja".to_string(), json!(info.id_caja));
+            obj.insert("nombre_caja".to_string(), json!(info.nombre_caja));
             let now_in_panama = Panama.from_utc_datetime(&Utc::now().naive_utc());
-            let formatted_time = now_in_panama.format("%m/%d/%Y %I:%M:%S %p").to_string().to_uppercase();
-
+            let formatted_time = now_in_panama
+                .format("%m/%d/%Y %I:%M:%S %p")
+                .to_string()
+                .to_uppercase();
             obj.insert("fecha".to_string(), json!(formatted_time));
         }
     }

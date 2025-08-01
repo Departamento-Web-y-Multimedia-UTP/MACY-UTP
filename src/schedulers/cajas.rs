@@ -1,8 +1,10 @@
+use crate::AppState;
 use crate::db::types::enums::CajasEstadoEnum;
 use crate::schema::{cajas, grupos};
 use crate::utils::cajas_utils::guardar_datos_caja;
+use chrono::prelude::*;
+use chrono_tz::America::Panama;
 use diesel::prelude::*;
-use crate::AppState;
 use tokio_cron_scheduler::{JobBuilder, JobScheduler};
 
 #[derive(Queryable, Debug, serde::Serialize)]
@@ -23,7 +25,7 @@ pub async fn cerrar_cajas_job(state: &AppState) -> Result<(), Box<dyn std::error
     let cerrar_caja_job = JobBuilder::new()
         .with_timezone(chrono_tz::America::Panama)
         .with_cron_job_type()
-        .with_schedule("* 59 23 * * *")
+        .with_schedule("0 0 23 * * *")
         .unwrap()
         .with_run_async(Box::new(move |_uuid, mut _lock| {
             let state = state.clone(); // 👈 move it into the closure
@@ -44,9 +46,15 @@ pub async fn cerrar_cajas_job(state: &AppState) -> Result<(), Box<dyn std::error
                     .load(&mut conn)
                     .unwrap();
 
+                let now_in_panama = Panama
+                    .from_utc_datetime(&Utc::now().naive_utc())
+                    .format("%m/%d/%Y %I:%M:%S %p")
+                    .to_string()
+                    .to_uppercase();
+
                 println!(
-                    "revisando si las cajas estan abiertas: {:#?}",
-                    cajas_with_keys
+                    "horario: {}, revisando si las cajas estan abiertas",
+                    now_in_panama,
                 );
 
                 for caja in cajas_with_keys {
