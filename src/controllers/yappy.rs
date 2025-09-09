@@ -68,8 +68,9 @@ pub async fn generar_qr(
     }
 
     payload.descripcion = format!(
-        "Pago por pedido: {} en Kiosko UTP del {}",
+        "Pedido: {}, {}, {}",
         payload.id_orden.clone().unwrap(),
+        info.nombre_grupo,
         info.nombre
     )
     .into();
