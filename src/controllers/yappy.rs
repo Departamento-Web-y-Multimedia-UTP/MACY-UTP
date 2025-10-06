@@ -16,7 +16,6 @@ use axum::{
 use chrono::prelude::*;
 use chrono_tz::America::Panama;
 use diesel::prelude::*;
-use dotenvy::dotenv;
 use serde_json::{Value, json};
 use std::env;
 
@@ -40,7 +39,6 @@ pub async fn generar_qr(
     State(state): State<AppState>,
     Json(mut payload): Json<GenerarQR>,
 ) -> Result<impl IntoResponse, (StatusCode, Json<Value>)> {
-    dotenv().ok(); // para inicializar el env
 
     let mac_address = headers
         .get("mac-address")
@@ -132,7 +130,6 @@ pub async fn cerrar_caja(
     headers: HeaderMap,
     State(state): State<AppState>,
 ) -> Result<impl IntoResponse, (StatusCode, Json<Value>)> {
-    dotenv().ok(); // para inicializar el env
 
     let mac_address = headers
         .get("mac-address")
@@ -163,7 +160,6 @@ pub async fn handle_transaccion(
     State(state): State<AppState>,
     OriginalUri(uri): OriginalUri,
 ) -> Result<impl IntoResponse, (StatusCode, Json<Value>)> {
-    dotenv().ok(); // para inicializar el env
 
     let mac_address = headers
         .get("mac-address")

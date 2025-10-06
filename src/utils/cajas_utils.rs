@@ -10,7 +10,6 @@ use axum::http::HeaderMap;
 use axum::{Json, http::StatusCode};
 use bigdecimal::{BigDecimal, FromPrimitive};
 use diesel::prelude::*;
-use dotenvy::dotenv;
 use std::env;
 //use serde::Serialize;
 use serde_json::Value;
@@ -105,7 +104,6 @@ pub async fn cerrar_caja_en_yappy(
     secret_key: String,
     auth_token: Option<String>,
 ) -> Result<Value, (StatusCode, Json<Value>)> {
-    dotenv().ok(); // para inicializar el env
 
     let client = reqwest::Client::new();
 
@@ -134,7 +132,6 @@ pub async fn abrir_caja_and_return_value(
     headers: HeaderMap,
     state: AppState,
 ) -> Result<Value, (StatusCode, Json<Value>)> {
-    dotenv().ok();
 
     let mac_address = headers
         .get("mac-address")

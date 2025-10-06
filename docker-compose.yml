@@ -1,0 +1,47 @@
+services:
+  macy-backend:
+    build:
+      context: .
+      dockerfile: dockerfile.macy
+    container_name: macy-backend
+    depends_on:
+      - mariadb
+    environment:
+      DATABASE_URL: mysql://MYSQL_USER:MYSQL_PASSWORD@mariadb:3306/macy
+      YAPPY_ENDPOINT: https://api-integrationcheckout-uat.yappycloud.com/v1
+      MYSQLCLIENT_VERSION: 8.0
+      MYSQLCLIENT_LIB_DIR: /usr/lib/x86_64-linux-gnu
+    expose:
+      - "3333:3333"
+    restart: always
+
+  mariadb:
+    image: mariadb:11.3
+    container_name: macy-mariadb
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: nedacted
+      MYSQL_DATABASE: macy
+      MYSQL_USER: redacted
+      MYSQL_PASSWORD: redacted
+    volumes:
+      - mariadb_macy_data:/var/lib/mysql
+    ports:
+      - "3306:3306"
+
+  nginx:
+    image: nginx:latest
+    container_name: macy-nginx
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./nginx/certificados/comodin.key:/etc/nginx/certs/comodin.key:ro
+      - ./nginx/certificados/fullchain.pem:/etc/nginx/certs/fullchain.pem:ro
+    depends_on:
+      - macy-backend
+
+volumes:
+  mariadb_macy_data:

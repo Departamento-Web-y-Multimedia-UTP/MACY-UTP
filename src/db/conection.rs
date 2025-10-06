@@ -1,5 +1,3 @@
-
-use dotenvy::dotenv;
 use std::env;
 
 use diesel::{
@@ -10,7 +8,6 @@ use diesel::{
 pub type MySqlPool = Pool<ConnectionManager<MysqlConnection>>;
 
 pub fn create_pool() -> MySqlPool {
-    dotenv().ok();
     let db_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
     let manager = ConnectionManager::<MysqlConnection>::new(db_url);
     Pool::builder()
