@@ -66,7 +66,7 @@ pub async fn generar_qr(
     }
 
     payload.descripcion = format!(
-        "Pedido: {}, {}, {}",
+        "Pedido: {} {} {}",
         payload.id_orden.clone().unwrap(),
         info.nombre_grupo,
         info.nombre
